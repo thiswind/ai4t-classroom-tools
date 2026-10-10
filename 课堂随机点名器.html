@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课堂随机点名器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%);
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 2vh 3vw;
+    color: #fff; user-select: none;
+  }
+  h1 { font-size: 3.2vmax; margin-bottom: 1.5vh; letter-spacing: .35em; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .panel {
+    background: rgba(255,255,255,.09); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.18); border-radius: 22px;
+    padding: 3vh 3.5vw; width: min(880px, 94vw);
+    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  }
+  .roster-zone { margin-bottom: 2.5vh; }
+  .roster-zone label { font-size: 1.35vmax; opacity: .92; display: block; margin-bottom: .8vh; }
+  textarea {
+    width: 100%; height: 15vh; font-size: 1.5vmax; line-height: 1.7;
+    padding: .9em; border-radius: 14px; border: none; resize: vertical;
+    background: rgba(255,255,255,.94); color: #1a237e; font-family: inherit;
+  }
+  textarea:focus { outline: 3px solid #ffca28; }
+  .ctrl-row { display: flex; gap: 2vw; align-items: center; justify-content: center; margin: 2.5vh 0; flex-wrap: wrap; }
+  .btn {
+    border: none; cursor: pointer; font-family: inherit; font-weight: 700;
+    border-radius: 999px; transition: transform .15s, box-shadow .15s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: scale(.96); }
+  .btn-start {
+    font-size: 2.2vmax; padding: .55em 2.4em; letter-spacing: .18em;
+    background: linear-gradient(135deg, #ffca28, #ffb300); color: #3e2723;
+    box-shadow: 0 8px 26px rgba(255,179,0,.45);
+  }
+  .btn-start:disabled { background: #78909c; box-shadow: none; cursor: not-allowed; }
+  .btn-reset { font-size: 1.15vmax; padding: .6em 1.8em; background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.3); }
+  .switch-row { display: flex; align-items: center; gap: .8em; font-size: 1.35vmax; }
+  .switch-row input[type=checkbox] { width: 1.6em; height: 1.6em; accent-color: #ffca28; cursor: pointer; }
+  .display {
+    background: rgba(0,0,0,.35); border-radius: 18px; padding: 3.2vh 2vw;
+    text-align: center; margin-bottom: 2vh; min-height: 24vh;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .name {
+    font-size: 7.5vmax; font-weight: 900; letter-spacing: .12em;
+    color: #ffca28; text-shadow: 0 4px 22px rgba(255,202,40,.5);
+    min-height: 9vmax; line-height: 1.15;
+  }
+  .name.rolling { animation: shake .09s infinite; color: #fff; text-shadow: 0 3px 14px rgba(255,255,255,.35); }
+  @keyframes shake { 0%{transform:translateX(-3px)} 50%{transform:translateX(3px)} 100%{transform:translateX(-2px)} }
+  .status { font-size: 1.5vmax; opacity: .85; margin-top: 1.2vh; }
+  .picked-zone { margin-top: 1.5vh; }
+  .picked-zone h3 { font-size: 1.3vmax; opacity: .9; margin-bottom: .8vh; font-weight: 600; }
+  .picked-list { display: flex; flex-wrap: wrap; gap: .55em; max-height: 11vh; overflow-y: auto; }
+  .picked-list span {
+    background: rgba(255,202,40,.2); border: 1px solid rgba(255,202,40,.55);
+    color: #ffecb3; border-radius: 999px; padding: .28em 1em; font-size: 1.25vmax;
+  }
+  .picked-list span:last-child { background: #ffca28; color: #3e2723; font-weight: 700; border-color: #ffca28; }
+  .footer-tip { margin-top: 1.8vh; font-size: 1.05vmax; opacity: .55; text-align: center; }
+</style>
+</head>
+<body>
+<h1>课堂随机点名器</h1>
+<div class="panel">
+
+  <div class="roster-zone">
+    <label for="roster">学生名单（每行一个名字，或用逗号/空格分隔）</label>
+    <textarea id="roster" placeholder="在此粘贴全班名单……"></textarea>
+  </div>
+
+  <div class="ctrl-row">
+    <button class="btn btn-start" id="btnStart">开始点名</button>
+    <button class="btn btn-reset" id="btnReset">重置本轮</button>
+    <div class="switch-row">
+      <input type="checkbox" id="noRepeat" checked>
+      <label for="noRepeat">不重复抽取</label>
+    </div>
+  </div>
+
+  <div class="display">
+    <div class="name" id="nameDisplay">准备好了吗？</div>
+    <div class="status" id="statusBar">点击"开始点名"抽取幸运同学</div>
+  </div>
+
+  <div class="picked-zone">
+    <h3>本轮已抽中（<span id="pickedCount">0</span> 人）</h3>
+    <div class="picked-list" id="pickedList"></div>
+  </div>
+
+  <div class="footer-tip">单文件网页 · 断网可用 · 数据不离开这台电脑（保存本页到 U 盘即可带走）</div>
+</div>
+
+<script>
+(function () {
+  var DEMO = [
+    "王思远","李昊然","张雨欣","刘一诺","陈子墨","杨梓萱","赵浩宇","黄诗涵",
+    "周子轩","吴依琳","徐浩然","孙梦琪","胡嘉懿","朱天佑","郭芯语","林俊杰",
+    "何雨桐","高晨曦","罗一鸣","郑雅雯","梁国豪","谢佳琪","宋明轩","唐语嫣",
+    "许志强","韩雪莹","冯天宇","邓紫棋","曹俊杰","彭静怡","曾子航","肖雨轩",
+    "田一诺","董思远","潘梦露","袁浩铭","蔡文静","蒋依诺","余子涵","杜雨泽"
+  ];
+  var rosterEl = document.getElementById('roster');
+  var nameEl = document.getElementById('nameDisplay');
+  var statusEl = document.getElementById('statusBar');
+  var btnStart = document.getElementById('btnStart');
+  var btnReset = document.getElementById('btnReset');
+  var noRepeatEl = document.getElementById('noRepeat');
+  var pickedListEl = document.getElementById('pickedList');
+  var pickedCountEl = document.getElementById('pickedCount');
+
+  var picked = [];        // 已抽中名单
+  var rolling = false;
+  var rollTimer = null;
+  var stopTimer = null;
+
+  rosterEl.value = DEMO.join('\n');
+  saveRoster();
+
+  function getNames() {
+    return rosterEl.value.split(/[\n,，、;；\s]+/).map(function (s) { return s.trim(); })
+      .filter(function (s) { return s.length > 0; });
+  }
+  function saveRoster() {
+    try { localStorage.setItem('rollcall_roster', rosterEl.value); } catch (e) {}
+  }
+  rosterEl.addEventListener('input', saveRoster);
+  try {
+    var saved = localStorage.getItem('rollcall_roster');
+    if (saved) rosterEl.value = saved;
+  } catch (e) {}
+
+  function renderPicked() {
+    pickedCountEl.textContent = picked.length;
+    pickedListEl.innerHTML = picked.map(function (n) { return '<span>' + n + '</span>'; }).join('');
+    pickedListEl.scrollTop = pickedListEl.scrollHeight;
+  }
+
+  function beep(freq, dur, delay) {
+    try {
+      var ctx = beep.ctx || (beep.ctx = new (window.AudioContext || window.webkitAudioContext)());
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = freq; o.type = 'triangle';
+      g.gain.setValueAtTime(.0001, ctx.currentTime + delay);
+      g.gain.exponentialRampToValueAtTime(.12, ctx.currentTime + delay + .01);
+      g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + delay + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + delay); o.stop(ctx.currentTime + delay + dur + .02);
+    } catch (e) {}
+  }
+
+  btnStart.addEventListener('click', function () {
+    if (rolling) { stopRoll(); return; }
+    var names = getNames();
+    if (names.length === 0) { statusEl.textContent = '请先在上方粘贴名单！'; return; }
+    var pool = noRepeatEl.checked ? names.filter(function (n) { return picked.indexOf(n) === -1; }) : names;
+    if (pool.length === 0) {
+      statusEl.textContent = '全部同学都抽过啦！点击"重置本轮"重新开始。';
+      beep(220, .3, 0);
+      return;
+    }
+    rolling = true;
+    btnStart.textContent = '停！';
+    nameEl.classList.add('rolling');
+    statusEl.textContent = '滚动中……再次点击按钮停下';
+    rollTimer = setInterval(function () {
+      var r = pool[Math.floor(Math.random() * pool.length)];
+      nameEl.textContent = r;
+      beep(660 + Math.random() * 240, .04, 0);
+    }, 90);
+  });
+
+  function stopRoll() {
+    rolling = false;
+    clearInterval(rollTimer);
+    btnStart.textContent = '开始点名';
+    var pool = noRepeatEl.checked ? getNames().filter(function (n) { return picked.indexOf(n) === -1; }) : getNames();
+    if (pool.length === 0) pool = getNames();
+    var winner = pool[Math.floor(Math.random() * pool.length)];
+    nameEl.textContent = winner;
+    nameEl.classList.remove('rolling');
+    picked.push(winner);
+    renderPicked();
+    statusEl.textContent = '恭喜 ' + winner + '！（剩余 ' + (noRepeatEl.checked ? (getNames().length - picked.length) : '∞') + ' 人未抽）';
+    beep(523, .12, 0); beep(659, .12, .13); beep(784, .22, .26);
+  }
+
+  btnReset.addEventListener('click', function () {
+    rolling = false; clearInterval(rollTimer);
+    picked = []; renderPicked();
+    btnStart.textContent = '开始点名';
+    nameEl.textContent = '准备好了吗？';
+    nameEl.classList.remove('rolling');
+    statusEl.textContent = '已重置，点击"开始点名"抽取幸运同学';
+  });
+
+  renderPicked();
+})();
+</script>
+</body>
+</html>

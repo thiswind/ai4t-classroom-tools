@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单词抽背卡</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #00695c 0%, #00897b 55%, #26a69a 100%);
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 2vh 3vw;
+    color: #fff; user-select: none;
+  }
+  h1 { font-size: 3vmax; margin-bottom: 1.2vh; letter-spacing: .3em; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .panel {
+    background: rgba(255,255,255,.1); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 22px;
+    padding: 2.8vh 3.2vw; width: min(860px, 94vw);
+    box-shadow: 0 12px 40px rgba(0,0,0,.3);
+  }
+  .toolbar { display: flex; gap: 1vw; align-items: center; margin-bottom: 2vh; flex-wrap: wrap; }
+  .btn {
+    border: none; cursor: pointer; font-family: inherit; font-weight: 700;
+    border-radius: 999px; transition: transform .15s; padding: .55em 1.6em;
+    background: rgba(255,255,255,.18); color: #fff; font-size: 1.3vmax;
+    border: 1px solid rgba(255,255,255,.3);
+  }
+  .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,.28); }
+  .btn.primary { background: linear-gradient(135deg,#ffca28,#ffb300); color: #3e2723; border: none; font-size: 1.5vmax; padding: .6em 2em; }
+  .mode-row { display: flex; gap: 1.2em; font-size: 1.35vmax; align-items: center; }
+  .mode-row label { cursor: pointer; display: flex; align-items: center; gap: .4em; }
+  .mode-row input { accent-color: #ffca28; width: 1.4em; height: 1.4em; cursor: pointer; }
+  .card-stage { perspective: 1400px; margin: 1.5vh 0 2vh; }
+  .flip-card {
+    width: min(560px, 80vw); height: 34vh; position: relative;
+    transform-style: preserve-3d; transition: transform .55s cubic-bezier(.4,.1,.2,1.2);
+    cursor: pointer;
+  }
+  .flip-card.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 24px; padding: 2em;
+  }
+  .face.front {
+    background: rgba(255,255,255,.96); color: #00695c;
+    box-shadow: 0 14px 44px rgba(0,0,0,.35);
+  }
+  .face.back {
+    background: linear-gradient(135deg,#ffca28,#ffb300); color: #3e2723;
+    transform: rotateY(180deg);
+    box-shadow: 0 14px 44px rgba(255,179,0,.4);
+  }
+  .word { font-size: 5.2vmax; font-weight: 900; letter-spacing: .04em; }
+  .hint { font-size: 1.35vmax; opacity: .55; margin-top: 1.4vh; letter-spacing: .12em; }
+  .meaning { font-size: 3.4vmax; font-weight: 800; line-height: 1.35; text-align: center; }
+  .example { font-size: 1.5vmax; margin-top: 1.6vh; opacity: .82; font-style: italic; }
+  .meta-row { display: flex; gap: 2.5vw; justify-content: center; font-size: 1.4vmax; margin-bottom: 1.5vh; opacity: .9; }
+  .meta-row b { color: #ffca28; font-size: 1.7vmax; }
+  .edit-zone details { margin-top: 1.8vh; }
+  .edit-zone summary { cursor: pointer; font-size: 1.25vmax; opacity: .8; }
+  textarea {
+    width: 100%; height: 14vh; margin-top: .8vh; font-size: 1.35vmax; line-height: 1.7;
+    padding: .9em; border-radius: 14px; border: none; resize: vertical;
+    background: rgba(255,255,255,.94); color: #004d40; font-family: inherit;
+  }
+  .footer-tip { margin-top: 1.6vh; font-size: 1.05vmax; opacity: .55; text-align: center; }
+</style>
+</head>
+<body>
+<h1>单词抽背卡</h1>
+<div class="panel">
+
+  <div class="toolbar">
+    <button class="btn primary" id="btnNext">抽一张</button>
+    <button class="btn" id="btnShuffle">打乱顺序</button>
+    <div class="mode-row">
+      <label><input type="radio" name="mode" value="en2cn" checked> 看英文说中文</label>
+      <label><input type="radio" name="mode" value="cn2en"> 看中文说英文</label>
+    </div>
+  </div>
+
+  <div class="meta-row">
+    <span>剩余 <b id="leftCount">0</b> 张</span>
+    <span>已背 <b id="doneCount">0</b> 张</span>
+  </div>
+
+  <div class="card-stage">
+    <div class="flip-card" id="flipCard">
+      <div class="face front">
+        <div class="word" id="frontText">准备好了吗？</div>
+        <div class="hint">点击卡片翻面看答案</div>
+      </div>
+      <div class="face back">
+        <div class="meaning" id="backText">点击"抽一张"开始</div>
+        <div class="example" id="exampleText"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="edit-zone">
+    <details>
+      <summary>编辑词表（每行：英文=中文，可带例句|例句翻译）</summary>
+      <textarea id="wordList" spellcheck="false"></textarea>
+    </details>
+  </div>
+
+  <div class="footer-tip">单文件网页 · 断网可用 · 保存本页到 U 盘即可带走</div>
+</div>
+
+<script>
+(function () {
+  var DEMO = [
+    "ability=能力|She has the ability to solve problems.",
+    "achieve=实现，达到|You can achieve your goals with effort.",
+    "advantage=优势|Speaking English is a big advantage.",
+    "ambition=雄心，抱负|Her ambition is to be a doctor.",
+    "analyze=分析|Let's analyze the data together.",
+    "ancient=古代的|Xi'an is an ancient city.",
+    "apply=申请；应用|Apply what you learn to real life.",
+    "attend=出席，参加|All students should attend the meeting.",
+    "available=可获得的|The book is available in the library.",
+    "balance=平衡|Keep a balance between study and rest.",
+    "behavior=行为|Good behavior is important in class.",
+    "challenge=挑战|Learning AI is a new challenge.",
+    "communicate=交流|We communicate in English every day.",
+    "compare=比较|Compare the two answers carefully.",
+    "complete=完成|Please complete the form first.",
+    "confident=自信的|Be confident when you speak.",
+    "consider=考虑|Consider the question from another side.",
+    "culture=文化|Food is part of culture.",
+    "decision=决定|It's a wise decision.",
+    "describe=描述|Describe the picture in English.",
+    "develop=发展，开发|China develops fast in AI.",
+    "difficulty=困难|Don't be afraid of difficulties.",
+    "education=教育|Education changes lives.",
+    "encourage=鼓励|Teachers encourage students to ask questions.",
+    "environment=环境|Protect our environment.",
+    "equipment=设备|The lab has new equipment.",
+    "especially=尤其|I like fruits, especially apples.",
+    "experience=经验；经历|Teaching experience matters.",
+    "explain=解释|Can you explain the rule again?",
+    "familiar=熟悉的|The word is familiar to me.",
+    "future=未来|AI will change the future of work.",
+    "gradually=逐渐地|Your English will gradually improve.",
+    "improve=改进，提高|Practice improves skills.",
+    "include=包括|The price includes breakfast.",
+    "independent=独立的|Be independent in learning.",
+    "knowledge=知识|Knowledge is power.",
+    "manage=管理；设法做到|She manages the class well.",
+    "necessary=必要的|Practice is necessary.",
+    "opportunity=机会|Every challenge is an opportunity.",
+    "practical=实用的|This is a practical tool."
+  ];
+
+  var listEl = document.getElementById('wordList');
+  var flipCard = document.getElementById('flipCard');
+  var frontText = document.getElementById('frontText');
+  var backText = document.getElementById('backText');
+  var exampleText = document.getElementById('exampleText');
+  var btnNext = document.getElementById('btnNext');
+  var btnShuffle = document.getElementById('btnShuffle');
+  var leftEl = document.getElementById('leftCount');
+  var doneEl = document.getElementById('doneCount');
+
+  var cards = [];      // {en, cn, ex}
+  var queue = [];      // 待抽下标
+  var done = 0;
+  var current = null;
+
+  function parse(text) {
+    return text.split('\n').map(function (line) {
+      line = line.trim();
+      if (!line) return null;
+      var parts = line.split('=');
+      if (parts.length < 2) return null;
+      var en = parts[0].trim();
+      var rest = parts.slice(1).join('=').split('|');
+      var cn = rest[0].trim();
+      var ex = rest[1] ? rest[1].trim() : '';
+      return { en: en, cn: cn, ex: ex };
+    }).filter(Boolean);
+  }
+
+  function save() { try { localStorage.setItem('wordcards_list', listEl.value); } catch (e) {} }
+  function load() {
+    try {
+      var s = localStorage.getItem('wordcards_list');
+      if (s) { listEl.value = s; return; }
+    } catch (e) {}
+    listEl.value = DEMO.join('\n');
+  }
+
+  function mode() {
+    var r = document.querySelector('input[name=mode]:checked');
+    return r ? r.value : 'en2cn';
+  }
+
+  function rebuild(keepDone) {
+    cards = parse(listEl.value);
+    queue = cards.map(function (_, i) { return i; });
+    if (!keepDone) done = 0;
+    updateMeta();
+  }
+
+  function updateMeta() {
+    leftEl.textContent = queue.length;
+    doneEl.textContent = done;
+  }
+
+  function draw() {
+    if (queue.length === 0) {
+      flipCard.classList.remove('flipped');
+      frontText.textContent = '全部背完啦！';
+      backText.textContent = '点击"打乱顺序"再来一轮';
+      exampleText.textContent = '';
+      return;
+    }
+    var idx = queue.shift();
+    current = idx;
+    flipCard.classList.remove('flipped');
+    var c = cards[idx];
+    setTimeout(function () {
+      if (mode() === 'en2cn') {
+        frontText.textContent = c.en;
+        backText.textContent = c.cn;
+      } else {
+        frontText.textContent = c.cn;
+        backText.textContent = c.en;
+      }
+      exampleText.textContent = c.ex || '';
+    }, 200);
+    updateMeta();
+  }
+
+  btnNext.addEventListener('click', function () {
+    if (flipCard.classList.contains('flipped')) done++;
+    draw();
+  });
+
+  flipCard.addEventListener('click', function () {
+    flipCard.classList.toggle('flipped');
+  });
+
+  btnShuffle.addEventListener('click', function () {
+    queue = cards.map(function (_, i) { return i; });
+    for (var i = queue.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = queue[i]; queue[i] = queue[j]; queue[j] = t;
+    }
+    done = 0;
+    updateMeta();
+    frontText.textContent = '已打乱！';
+    setTimeout(draw, 500);
+  });
+
+  listEl.addEventListener('change', function () { save(); rebuild(false); });
+  document.querySelectorAll('input[name=mode]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      if (current !== null) {
+        var c = cards[current];
+        if (mode() === 'en2cn') { frontText.textContent = c.en; backText.textContent = c.cn; }
+        else { frontText.textContent = c.cn; backText.textContent = c.en; }
+        flipCard.classList.remove('flipped');
+      }
+    });
+  });
+
+  load();
+  rebuild(false);
+  frontText.textContent = '准备好了吗？';
+})();
+</script>
+</body>
+</html>
